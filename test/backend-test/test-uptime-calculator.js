@@ -481,6 +481,48 @@ describe("Uptime Calculator", () => {
             }
         );
     });
+
+    test("getStatusPageRange() sums the stored data for a status page range", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 20:46:59");
+        let c = new UptimeCalculator();
+        await c.update(DOWN, 0, dayjs.utc("2023-08-12 20:21:30"));
+        await c.update(UP, 100, dayjs.utc("2023-08-12 20:22:30"));
+        await c.update(UP, 50, dayjs.utc("2023-08-12 20:40:00"));
+        await c.update(UP, 50, dayjs.utc("2023-08-12 20:46:00"));
+
+        assert.strictEqual(c.getStatusPageRange("1").uptime, 0.75);
+        assert.strictEqual(c.getStatusPageRange("24").uptime, 0.75);
+        assert.strictEqual(c.getStatusPageRange("1y").uptime, 0.75);
+        assert.throws(() => c.getStatusPageRange("2"), /Unknown status page range/);
+    });
+
+    test("getStatusPageBeats() splits the range into buckets, newest last", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 20:46:59");
+        let c = new UptimeCalculator();
+        await c.update(DOWN, 0, dayjs.utc("2023-08-12 20:21:30"));
+        await c.update(UP, 100, dayjs.utc("2023-08-12 20:22:30"));
+        await c.update(UP, 50, dayjs.utc("2023-08-12 20:40:00"));
+        await c.update(UP, 50, dayjs.utc("2023-08-12 20:46:00"));
+
+        // One hour as six ten-minute buckets, from 19:47 to 20:46
+        let beats = c.getStatusPageBeats("1", 6);
+        assert.strictEqual(beats.length, 6);
+        assert.strictEqual(beats[0].time, "2023-08-12 19:47:00");
+        assert.strictEqual(beats[0].status, null);
+        assert.strictEqual(beats[3].status, PENDING);
+        assert.strictEqual(beats[3].msg, "1 of 2 checks down");
+        assert.strictEqual(beats[3].ping, 100);
+        assert.strictEqual(beats[5].status, UP);
+        assert.strictEqual(beats[5].ping, 50);
+
+        // The newest bucket shows the monitor's current status
+        beats = c.getStatusPageBeats("1", 6, DOWN);
+        assert.strictEqual(beats[5].status, DOWN);
+
+        // Never more buckets than asked for
+        assert.ok(c.getStatusPageBeats("1y", 90).length <= 90);
+        assert.throws(() => c.getStatusPageBeats("2", 6), /Unknown status page range/);
+    });
 });
 
 /**

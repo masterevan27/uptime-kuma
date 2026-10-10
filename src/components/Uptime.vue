@@ -87,13 +87,11 @@ export default {
             if (this.type === "1y") {
                 return this.$t("years", 1);
             }
-            if (this.type === "720") {
-                return this.$t("days", 30);
+            const hours = Number(this.type);
+            if (hours >= 24 && hours % 24 === 0) {
+                return this.$t("days", hours / 24);
             }
-            if (this.type === "168") {
-                return this.$t("days", 7);
-            }
-            return this.$t("hours", 24);
+            return this.$t("hours", hours || 24);
         },
     },
 };

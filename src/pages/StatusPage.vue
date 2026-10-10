@@ -490,7 +490,7 @@
                 </div>
 
                 <div
-                    v-if="$root.publicGroupList.length > 0 && !config.showOnlyLastHeartbeat"
+                    v-if="$root.publicGroupList.length > 0 && uptimeRangeSelectable"
                     class="d-flex justify-content-end align-items-center mb-3"
                 >
                     <label for="uptime-range" class="form-label mb-0 me-2">{{ $t("statusPageUptimeRange") }}</label>
@@ -512,6 +512,7 @@
                     :show-certificate-expiry="config.showCertificateExpiry"
                     :show-only-last-heartbeat="config.showOnlyLastHeartbeat"
                     :uptime-range="uptimeRange"
+                    :aggregated-heartbeats="uptimeRangeSelectable && !enableEditMode"
                 />
             </div>
 
@@ -729,6 +730,8 @@ export default {
             incidentHistoryNextCursor: null,
             incidentHistoryHasMore: false,
             uptimeRange: "24",
+            // Beats that fit a heartbeat bar, reported by the bars; null until known
+            heartbeatBeats: null,
         };
     },
     computed: {
@@ -739,11 +742,22 @@ export default {
          */
         uptimeRangeList() {
             return [
+                { value: "1", label: this.$t("hours", 1) },
+                { value: "3", label: this.$t("hours", 3) },
+                { value: "5", label: this.$t("hours", 5) },
                 { value: "24", label: this.$t("hours", 24) },
                 { value: "168", label: this.$t("days", 7) },
                 { value: "720", label: this.$t("days", 30) },
                 { value: "1y", label: this.$t("years", 1) },
             ];
+        },
+
+        /**
+         * Pages that show only the last heartbeat keep raw heartbeats and no selector.
+         * @returns {boolean} Whether the uptime range applies to this page
+         */
+        uptimeRangeSelectable() {
+            return !this.config.showOnlyLastHeartbeat;
         },
 
         /**
@@ -938,6 +952,7 @@ export default {
     watch: {
         uptimeRange(range) {
             localStorage.setItem(this.uptimeRangeStorageKey, range);
+            this.updateHeartbeatList();
         },
 
         /**
@@ -1046,6 +1061,12 @@ export default {
                     this.imgDataUrl = this.config.icon;
                 }
 
+                // The first fetch ran before the config was known: a page that
+                // shows only the last heartbeat needs raw heartbeats, not buckets.
+                if (!this.uptimeRangeSelectable) {
+                    this.updateHeartbeatList();
+                }
+
                 this.maintenanceList = res.data.maintenanceList;
                 this.$root.publicGroupList = res.data.publicGroupList;
 
@@ -1118,13 +1139,33 @@ export default {
         },
 
         /**
+         * Called by the heartbeat bars when the number of beats that fit changes
+         * @param {number} maxBeat Beats that fit in a bar
+         * @returns {void}
+         */
+        reloadHeartbeatData(maxBeat) {
+            if (maxBeat > 0 && maxBeat !== this.heartbeatBeats) {
+                this.heartbeatBeats = maxBeat;
+                this.updateHeartbeatList();
+            }
+        },
+
+        /**
          * Update the heartbeat list and update favicon if necessary
          * @returns {void}
          */
         updateHeartbeatList() {
             // If editMode, it will use the data from websocket.
             if (!this.editMode) {
-                axios.get("/api/status-page/heartbeat/" + this.slug).then((res) => {
+                let url = "/api/status-page/heartbeat/" + this.slug;
+                if (this.uptimeRangeSelectable) {
+                    const params = new URLSearchParams({ range: this.uptimeRange });
+                    if (this.heartbeatBeats) {
+                        params.set("beats", this.heartbeatBeats);
+                    }
+                    url += "?" + params.toString();
+                }
+                axios.get(url).then((res) => {
                     const { heartbeatList, uptimeList } = res.data;
 
                     this.$root.heartbeatList = heartbeatList;

@@ -68,6 +68,14 @@ export default {
             type: Number,
             default: 0,
         },
+        /**
+         * The beats are buckets the server aggregated to fit the bar: show
+         * them all and ask the parent for new ones when the width changes.
+         */
+        aggregated: {
+            type: Boolean,
+            default: false,
+        },
     },
     data() {
         return {
@@ -98,6 +106,14 @@ export default {
         },
 
         /**
+         * Whether the server sized the beat list for this bar
+         * @returns {boolean} True when every beat is shown without padding
+         */
+        showAllBeats() {
+            return this.aggregated || this.normalizedHeartbeatBarDays > 0;
+        },
+
+        /**
          * If heartbeatList is null, get it from $root.heartbeatList
          * @returns {object} Heartbeat list
          */
@@ -119,7 +135,7 @@ export default {
             }
 
             // For configured ranges, no padding needed since we show all beats
-            if (this.normalizedHeartbeatBarDays > 0) {
+            if (this.showAllBeats) {
                 return 0;
             }
 
@@ -142,7 +158,7 @@ export default {
             }
 
             // If heartbeat days is configured (not auto), data is already aggregated from server
-            if (this.normalizedHeartbeatBarDays > 0 && this.beatList.length > 0) {
+            if (this.showAllBeats && this.beatList.length > 0) {
                 // Show all beats from server - they are already properly aggregated
                 return this.beatList;
             }
@@ -235,6 +251,9 @@ export default {
             // Need to calculate from actual data
             const firstValidBeat = this.shortBeatList.at(this.numPadding);
             const minutes = dayjs().diff(dayjs.utc(firstValidBeat?.time), "minutes");
+            if (minutes >= 2 * 24 * 60) {
+                return Math.floor(minutes / (24 * 60)) + "d";
+            }
             return minutes > 60 ? Math.floor(minutes / 60) + "h" : minutes + "m";
         },
 
@@ -379,7 +398,7 @@ export default {
                 );
 
                 // If maxBeat changed and we're in configured days mode, notify parent to reload data
-                if (newMaxBeat !== this.maxBeat && this.normalizedHeartbeatBarDays > 0) {
+                if (newMaxBeat !== this.maxBeat && this.showAllBeats) {
                     this.maxBeat = newMaxBeat;
 
                     // Find the closest parent with reloadHeartbeatData method (StatusPage)

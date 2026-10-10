@@ -61,12 +61,29 @@ router.get("/api/status-page/:slug", cache("5 minutes"), async (request, respons
 
 // Status Page Polling Data
 // Can fetch only if published
+// With ?range= (a key of UptimeCalculator.STATUS_PAGE_RANGES) the beats cover
+// that range as at most ?beats= aggregated buckets; without it they are the
+// last 100 heartbeats.
 router.get("/api/status-page/heartbeat/:slug", cache("1 minutes"), async (request, response) => {
     allowDevAllOrigin(response);
 
     try {
         let heartbeatList = {};
         let uptimeList = {};
+
+        const range = request.query.range;
+        if (range !== undefined && !(range in UptimeCalculator.STATUS_PAGE_RANGES)) {
+            response.status(400).json({
+                status: "fail",
+                msg: "Unknown range",
+            });
+            return;
+        }
+        let beats = parseInt(request.query.beats);
+        if (!Number.isInteger(beats) || beats < 1) {
+            beats = 100;
+        }
+        beats = Math.min(beats, 1000);
 
         let slug = request.params.slug;
         slug = slug.toLowerCase();
@@ -88,15 +105,20 @@ router.get("/api/status-page/heartbeat/:slug", cache("1 minutes"), async (reques
                     SELECT * FROM heartbeat
                     WHERE monitor_id = ?
                     ORDER BY time DESC
-                    LIMIT 100
+                    LIMIT ?
             `,
-                [monitorID]
+                [monitorID, range !== undefined ? 1 : 100]
             );
 
             list = R.convertToBeans("heartbeat", list);
-            heartbeatList[monitorID] = list.reverse().map((row) => row.toPublicJSON());
 
             const uptimeCalculator = await UptimeCalculator.getUptimeCalculator(monitorID);
+            if (range !== undefined) {
+                const latestStatus = list.length > 0 ? list[0].status : null;
+                heartbeatList[monitorID] = uptimeCalculator.getStatusPageBeats(range, beats, latestStatus);
+            } else {
+                heartbeatList[monitorID] = list.reverse().map((row) => row.toPublicJSON());
+            }
             Object.assign(uptimeList, StatusPage.getPublicUptimeList(monitorID, uptimeCalculator));
         }
 

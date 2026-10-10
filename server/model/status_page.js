@@ -10,6 +10,7 @@ const config = require("../config");
 const dayjs = require("dayjs");
 
 const { setting } = require("../util-server");
+const { UptimeCalculator } = require("../uptime-calculator");
 const {
     STATUS_PAGE_ALL_DOWN,
     STATUS_PAGE_ALL_UP,
@@ -491,15 +492,14 @@ class StatusPage extends BeanModel {
      * the way the Uptime component reads uptimeList (`<monitorID>_<range>`).
      * @param {number} monitorID ID of the monitor
      * @param {UptimeCalculator} uptimeCalculator Calculator of that monitor
-     * @returns {object} Uptime (0 to 1) per range: 24, 168, 720 and 1y
+     * @returns {object} Uptime (0 to 1) per range in UptimeCalculator.STATUS_PAGE_RANGES
      */
     static getPublicUptimeList(monitorID, uptimeCalculator) {
-        return {
-            [`${monitorID}_24`]: uptimeCalculator.get24Hour().uptime,
-            [`${monitorID}_168`]: uptimeCalculator.get7Day().uptime,
-            [`${monitorID}_720`]: uptimeCalculator.get30Day().uptime,
-            [`${monitorID}_1y`]: uptimeCalculator.get1Year().uptime,
-        };
+        const uptimeList = {};
+        for (const range of Object.keys(UptimeCalculator.STATUS_PAGE_RANGES)) {
+            uptimeList[`${monitorID}_${range}`] = uptimeCalculator.getStatusPageRange(range).uptime;
+        }
+        return uptimeList;
     }
 
     /**

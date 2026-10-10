@@ -88,14 +88,23 @@ describe("StatusPage", () => {
 
     describe("getPublicUptimeList()", () => {
         test("returns the uptime of every range the status page can show", () => {
+            const uptimes = {
+                1: 1,
+                3: 0.999,
+                5: 0.995,
+                24: 0.99,
+                168: 0.98,
+                720: 0.97,
+                "1y": 0.96,
+            };
             const uptimeCalculator = {
-                get24Hour: () => ({ uptime: 0.99 }),
-                get7Day: () => ({ uptime: 0.98 }),
-                get30Day: () => ({ uptime: 0.97 }),
-                get1Year: () => ({ uptime: 0.96 }),
+                getStatusPageRange: (range) => ({ uptime: uptimes[range] }),
             };
 
             assert.deepStrictEqual(StatusPage.getPublicUptimeList(7, uptimeCalculator), {
+                "7_1": 1,
+                "7_3": 0.999,
+                "7_5": 0.995,
                 "7_24": 0.99,
                 "7_168": 0.98,
                 "7_720": 0.97,

@@ -116,7 +116,11 @@
                                             </div>
                                         </div>
                                         <div :key="$root.userHeartbeatBar" class="col-3 col-xl-6">
-                                            <HeartbeatBar size="mid" :monitor-id="monitor.element.id" />
+                                            <HeartbeatBar
+                                                size="mid"
+                                                :monitor-id="monitor.element.id"
+                                                :aggregated="aggregatedHeartbeats"
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -165,10 +169,15 @@ export default {
         showOnlyLastHeartbeat: {
             type: Boolean,
         },
-        /** Range of the uptime percentage: "24", "168", "720" or "1y" */
+        /** Range of the uptime percentage: a key of UptimeCalculator.STATUS_PAGE_RANGES */
         uptimeRange: {
             type: String,
             default: "24",
+        },
+        /** Are the heartbeats server-aggregated buckets for that range? */
+        aggregatedHeartbeats: {
+            type: Boolean,
+            default: false,
         },
     },
     data() {

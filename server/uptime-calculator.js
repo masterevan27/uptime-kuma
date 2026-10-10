@@ -800,6 +800,124 @@ class UptimeCalculator {
     }
 
     /**
+     * Ranges a status page can show, keyed as the frontend's Uptime
+     * component expects (hours, or "1y"), with their length in minutes.
+     * @type {{[key: string]: number}}
+     */
+    static STATUS_PAGE_RANGES = {
+        1: 60,
+        3: 180,
+        5: 300,
+        24: 1440,
+        168: 7 * 1440,
+        720: 30 * 1440,
+        "1y": 365 * 1440,
+    };
+
+    /**
+     * Which stored granularity covers a range: minutely data is kept for
+     * 24 hours, hourly for 30 days and daily for a year.
+     * @param {number} minutes Length of the range in minutes
+     * @returns {"minute"|"hour"|"day"} Data type
+     */
+    static statusPageRangeType(minutes) {
+        if (minutes <= 1440) {
+            return "minute";
+        }
+        if (minutes <= 30 * 1440) {
+            return "hour";
+        }
+        return "day";
+    }
+
+    /**
+     * Uptime over one of the status page ranges.
+     * @param {string} range Key of STATUS_PAGE_RANGES
+     * @returns {UptimeDataResult} UptimeDataResult
+     * @throws {Error} Unknown range
+     */
+    getStatusPageRange(range) {
+        const minutes = UptimeCalculator.STATUS_PAGE_RANGES[range];
+        if (minutes === undefined) {
+            throw new Error(`Unknown status page range: ${range}`);
+        }
+        const type = UptimeCalculator.statusPageRangeType(minutes);
+        const periodMinutes = { minute: 1, hour: 60, day: 1440 }[type];
+        return this.getData(minutes / periodMinutes, type);
+    }
+
+    /**
+     * Beats for a status page heartbeat bar: the range split into at most
+     * `beats` buckets of equal length, oldest first, built from the stored
+     * statistics. A bucket without checks has a null status; one with both
+     * up and down checks is PENDING, so the bar shows it as partial. The
+     * newest bucket takes `latestStatus` when given, so the page's current
+     * status stays that of the last heartbeat.
+     * @param {string} range Key of STATUS_PAGE_RANGES
+     * @param {number} beats Maximum number of buckets
+     * @param {number|null} latestStatus Status of the monitor's last heartbeat
+     * @returns {Array<{status: number|null, time: string, msg: string, ping: number|null}>} Beats
+     * @throws {Error} Unknown range
+     */
+    getStatusPageBeats(range, beats, latestStatus = null) {
+        const minutes = UptimeCalculator.STATUS_PAGE_RANGES[range];
+        if (minutes === undefined) {
+            throw new Error(`Unknown status page range: ${range}`);
+        }
+        const type = UptimeCalculator.statusPageRangeType(minutes);
+        const periodSeconds = { minute: 60, hour: 3600, day: 86400 }[type];
+        const periods = (minutes * 60) / periodSeconds;
+        const bucketSeconds = Math.ceil(periods / Math.max(1, beats)) * periodSeconds;
+
+        const endKey = this.getKey(this.getCurrentDate(), type);
+        const startKey = endKey - (periods - 1) * periodSeconds;
+
+        const buckets = [];
+        for (let start = startKey; start <= endKey; start += bucketSeconds) {
+            buckets.push({ start, up: 0, down: 0, maintenance: 0, pingSum: 0 });
+        }
+
+        for (const entry of this.getDataArray(periods, type)) {
+            const bucket = buckets[Math.floor((entry.timestamp - startKey) / bucketSeconds)];
+            if (!bucket) {
+                continue;
+            }
+            bucket.up += entry.up;
+            bucket.down += entry.down;
+            bucket.maintenance += entry.maintenance || 0;
+            bucket.pingSum += (entry.avgPing || 0) * entry.up;
+        }
+
+        const result = buckets.map((bucket) => {
+            const checks = bucket.up + bucket.down;
+            let status = null;
+            let msg = "";
+            if (checks === 0 && bucket.maintenance > 0) {
+                status = MAINTENANCE;
+            } else if (checks > 0 && bucket.down === 0) {
+                status = UP;
+            } else if (checks > 0 && bucket.up === 0) {
+                status = DOWN;
+            } else if (checks > 0) {
+                status = PENDING;
+                msg = `${bucket.down} of ${checks} checks down`;
+            }
+            return {
+                status,
+                time: dayjs.unix(bucket.start).utc().format("YYYY-MM-DD HH:mm:ss"),
+                msg,
+                ping: bucket.up > 0 ? Math.round(bucket.pingSum / bucket.up) : null,
+            };
+        });
+
+        if (latestStatus !== null && result.length > 0) {
+            result[result.length - 1].status = latestStatus;
+        }
+
+        return result;
+    }
+
+    /**
      * 1440 = 24 * 60mins
      * @returns {UptimeDataResult} UptimeDataResult
      */

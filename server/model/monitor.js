@@ -1330,9 +1330,12 @@ class Monitor extends BeanModel {
             // Send 24 hour uptime
             io.to(userID).emit("uptime", monitorID, 24, data24h.uptime);
 
-            // Send 7 day uptime
-            let data7d = await uptimeCalculator.get7Day();
-            io.to(userID).emit("uptime", monitorID, 168, data7d.uptime);
+            // Send the other status page ranges, so edit mode can show them
+            for (const range of Object.keys(UptimeCalculator.STATUS_PAGE_RANGES)) {
+                if (!["24", "720", "1y"].includes(range)) {
+                    io.to(userID).emit("uptime", monitorID, range, uptimeCalculator.getStatusPageRange(range).uptime);
+                }
+            }
 
             // Send 30 day uptime
             let data30d = await uptimeCalculator.get30Day();
