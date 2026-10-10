@@ -489,11 +489,29 @@
                     👀 {{ $t("statusPageNothing") }}
                 </div>
 
+                <div
+                    v-if="$root.publicGroupList.length > 0 && !config.showOnlyLastHeartbeat"
+                    class="d-flex justify-content-end align-items-center mb-3"
+                >
+                    <label for="uptime-range" class="form-label mb-0 me-2">{{ $t("statusPageUptimeRange") }}</label>
+                    <select
+                        id="uptime-range"
+                        v-model="uptimeRange"
+                        class="form-select form-select-sm w-auto"
+                        data-testid="uptime-range-select"
+                    >
+                        <option v-for="range in uptimeRangeList" :key="range.value" :value="range.value">
+                            {{ range.label }}
+                        </option>
+                    </select>
+                </div>
+
                 <PublicGroupList
                     :edit-mode="enableEditMode"
                     :show-tags="config.showTags"
                     :show-certificate-expiry="config.showCertificateExpiry"
                     :show-only-last-heartbeat="config.showOnlyLastHeartbeat"
+                    :uptime-range="uptimeRange"
                 />
             </div>
 
@@ -710,9 +728,30 @@ export default {
             incidentHistoryLoading: false,
             incidentHistoryNextCursor: null,
             incidentHistoryHasMore: false,
+            uptimeRange: "24",
         };
     },
     computed: {
+        /**
+         * Ranges the uptime percentage can be shown for. The values are the
+         * keys the server sends in uptimeList (hours, or "1y").
+         * @returns {Array<{value: string, label: string}>} ranges
+         */
+        uptimeRangeList() {
+            return [
+                { value: "24", label: this.$t("hours", 24) },
+                { value: "168", label: this.$t("days", 7) },
+                { value: "720", label: this.$t("days", 30) },
+                { value: "1y", label: this.$t("years", 1) },
+            ];
+        },
+
+        /**
+         * @returns {string} localStorage key of the chosen uptime range
+         */
+        uptimeRangeStorageKey() {
+            return `statusPageUptimeRange-${this.slug}`;
+        },
         logoURL() {
             if (this.imgDataUrl.startsWith("data:")) {
                 return this.imgDataUrl;
@@ -897,6 +936,10 @@ export default {
         },
     },
     watch: {
+        uptimeRange(range) {
+            localStorage.setItem(this.uptimeRangeStorageKey, range);
+        },
+
         /**
          * If connected to the socket and logged in, request private data of this statusPage
          * @param {boolean} loggedIn Is the client logged in?
@@ -983,6 +1026,12 @@ export default {
 
         if (!this.slug) {
             this.slug = "default";
+        }
+
+        // Keep the viewer's last chosen uptime range for this page.
+        const storedUptimeRange = localStorage.getItem(this.uptimeRangeStorageKey);
+        if (this.uptimeRangeList.some((range) => range.value === storedUptimeRange)) {
+            this.uptimeRange = storedUptimeRange;
         }
 
         this.getData()

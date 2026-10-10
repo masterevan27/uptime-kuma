@@ -85,4 +85,22 @@ describe("StatusPage", () => {
             }
         });
     });
+
+    describe("getPublicUptimeList()", () => {
+        test("returns the uptime of every range the status page can show", () => {
+            const uptimeCalculator = {
+                get24Hour: () => ({ uptime: 0.99 }),
+                get7Day: () => ({ uptime: 0.98 }),
+                get30Day: () => ({ uptime: 0.97 }),
+                get1Year: () => ({ uptime: 0.96 }),
+            };
+
+            assert.deepStrictEqual(StatusPage.getPublicUptimeList(7, uptimeCalculator), {
+                "7_24": 0.99,
+                "7_168": 0.98,
+                "7_720": 0.97,
+                "7_1y": 0.96,
+            });
+        });
+    });
 });

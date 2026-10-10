@@ -1330,6 +1330,10 @@ class Monitor extends BeanModel {
             // Send 24 hour uptime
             io.to(userID).emit("uptime", monitorID, 24, data24h.uptime);
 
+            // Send 7 day uptime
+            let data7d = await uptimeCalculator.get7Day();
+            io.to(userID).emit("uptime", monitorID, 168, data7d.uptime);
+
             // Send 30 day uptime
             let data30d = await uptimeCalculator.get30Day();
             io.to(userID).emit("uptime", monitorID, 720, data30d.uptime);

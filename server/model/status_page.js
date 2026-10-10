@@ -487,6 +487,22 @@ class StatusPage extends BeanModel {
     }
 
     /**
+     * Uptime of a monitor for every range the status page can show, keyed
+     * the way the Uptime component reads uptimeList (`<monitorID>_<range>`).
+     * @param {number} monitorID ID of the monitor
+     * @param {UptimeCalculator} uptimeCalculator Calculator of that monitor
+     * @returns {object} Uptime (0 to 1) per range: 24, 168, 720 and 1y
+     */
+    static getPublicUptimeList(monitorID, uptimeCalculator) {
+        return {
+            [`${monitorID}_24`]: uptimeCalculator.get24Hour().uptime,
+            [`${monitorID}_168`]: uptimeCalculator.get7Day().uptime,
+            [`${monitorID}_720`]: uptimeCalculator.get30Day().uptime,
+            [`${monitorID}_1y`]: uptimeCalculator.get1Year().uptime,
+        };
+    }
+
+    /**
      * Convert slug to status page ID
      * @param {string} slug Status page slug
      * @returns {Promise<number>} ID of status page
